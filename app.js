@@ -22,7 +22,6 @@ const result = document.getElementById("result");
 const chartPanel = document.getElementById("chartPanel");
 const passOptimizationToggle = document.getElementById("passOptimizationToggle");
 const chartSvg = d3.select("#fareChart");
-const svg = d3.select("#mapSvg");
 const stationSuggestionsByInput = new Map([
   [startInput, document.getElementById("startSuggestions")],
   [endInput, document.getElementById("endSuggestions")],
@@ -141,7 +140,6 @@ const lineColorById = new Map(metroData.lines.map((line) => [line.id, line.color
 const lineNameById = new Map(metroData.lines.map((line) => [line.id, line.name]));
 const missingDistanceMarker = metroData.distanceMetadata?.missingDistanceMarker;
 const metroNetwork = createMetroNetwork(metroData.stations, metroData.edges);
-const graph = buildGraph(svg, metroData);
 
 passOptimizationToggle.addEventListener("click", () => {
   passOptimizationEnabled = !passOptimizationEnabled;
@@ -157,7 +155,6 @@ searchBtn.addEventListener("click", () => {
     result.textContent = "请输入有效的站名（从下拉建议中选择）。";
     chartPanel.classList.remove("active");
     chartSvg.selectAll("*").remove();
-    graph.highlight([], []);
     return;
   }
 
@@ -168,7 +165,6 @@ searchBtn.addEventListener("click", () => {
     const fareSummary = buildFareSummary(0);
     result.innerHTML = `<strong>起终点相同：</strong>${from}，${fareSummary}`;
     renderFareChart(0);
-    graph.highlight([from], []);
     return;
   }
 
@@ -177,7 +173,6 @@ searchBtn.addEventListener("click", () => {
     result.textContent = "未找到可达路径。";
     chartPanel.classList.remove("active");
     chartSvg.selectAll("*").remove();
-    graph.highlight([], []);
     return;
   }
 
@@ -202,7 +197,6 @@ searchBtn.addEventListener("click", () => {
   ].join("");
 
   renderFareChart(pathResult.distanceKm);
-  graph.highlight(pathResult.stations, pathResult.segments);
 });
 
 result.innerHTML = `已加载 ${metroData.stations.length} 个站点，选择起终点后点击“查询票价及路径”。`;
@@ -218,7 +212,7 @@ function buildFareSummary(distanceKm) {
 
 function refreshPassToggleButton() {
   passOptimizationToggle.setAttribute("aria-pressed", String(passOptimizationEnabled));
-  passOptimizationToggle.textContent = passOptimizationEnabled ? "关闭次卡优化" : "使用次卡优化";
+  passOptimizationToggle.textContent = passOptimizationEnabled ? "关闭次卡省钱" : "使用次卡省钱";
 }
 
 function getDisplaySchemeName(schemeKey, schemeName) {
@@ -226,7 +220,7 @@ function getDisplaySchemeName(schemeKey, schemeName) {
     return schemeName;
   }
 
-  return `${schemeName}（次卡优化）`;
+  return `${schemeName}（次卡省钱）`;
 }
 
 function renderFareChart(distanceKm) {
@@ -284,7 +278,7 @@ function renderFareChart(distanceKm) {
   }
 
   const visibleEntries = Array.from(mergedEntries.values()).map((entry) => ({
-    name: entry.names.length > 1 ? entry.names.join(" + ") : entry.names[0],
+    name: entry.names.length > 1 ? entry.names.join("/") : entry.names[0],
     color: entry.color,
     data: entry.data,
   }));
@@ -478,92 +472,3 @@ function summarizeLines(segments) {
     .join("；");
 }
 
-function buildGraph(svgRoot, metro) {
-  const width = 1200;
-  const height = 800;
-
-  svgRoot.attr("viewBox", `0 0 ${width} ${height}`);
-  const zoomGroup = svgRoot.append("g");
-
-  svgRoot.call(
-    d3.zoom().scaleExtent([0.3, 6]).on("zoom", (event) => {
-      zoomGroup.attr("transform", event.transform);
-    }),
-  );
-
-  const nodes = metro.stations.map((station) => ({ id: station }));
-  const links = metro.edges.map((edge) => ({
-    source: edge.from,
-    target: edge.to,
-    lineId: edge.lineId,
-  }));
-
-  const simulation = d3
-    .forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id((d) => d.id).distance(18).strength(1))
-    .force("charge", d3.forceManyBody().strength(-35))
-    .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collision", d3.forceCollide(5));
-
-  const edge = zoomGroup
-    .append("g")
-    .attr("class", "edges")
-    .selectAll("line")
-    .data(links)
-    .join("line")
-    .attr("class", "edge");
-
-  const station = zoomGroup
-    .append("g")
-    .attr("class", "stations")
-    .selectAll("circle")
-    .data(nodes)
-    .join("circle")
-    .attr("class", "station")
-    .attr("r", 2.6);
-
-  const label = zoomGroup
-    .append("g")
-    .attr("class", "labels")
-    .selectAll("text")
-    .data(nodes)
-    .join("text")
-    .attr("class", "station-label")
-    .attr("dx", 4)
-    .attr("dy", 3)
-    .text((d) => d.id)
-    .style("display", "none");
-
-  simulation.on("tick", () => {
-    edge
-      .attr("x1", (d) => d.source.x)
-      .attr("y1", (d) => d.source.y)
-      .attr("x2", (d) => d.target.x)
-      .attr("y2", (d) => d.target.y);
-
-    station.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
-    label.attr("x", (d) => d.x).attr("y", (d) => d.y);
-  });
-
-  return {
-    highlight(pathStations, pathSegments) {
-      const nodeSet = new Set(pathStations);
-      const edgeKeySet = new Set(
-        pathSegments.map((seg) => edgeKey(seg.from, seg.to, seg.lineId)),
-      );
-
-      station.classed("active", (d) => nodeSet.has(d.id));
-      label
-        .classed("active", (d) => nodeSet.has(d.id))
-        .style("display", (d) => (nodeSet.has(d.id) ? "block" : "none"));
-
-      edge.classed("active", (d) =>
-        edgeKeySet.has(edgeKey(d.source.id, d.target.id, d.lineId)),
-      );
-    },
-  };
-}
-
-function edgeKey(a, b, lineId) {
-  return `${[a, b].sort().join("::")}::${lineId}`;
-}

@@ -1,4 +1,4 @@
-# 月卡/次卡优化折线图设计方案
+# 月卡/次卡省钱折线图设计方案
 
 ## 背景
 
@@ -12,17 +12,17 @@
 
 ## 目标
 
-1. 为图表增加一个“是否使用次卡优化”的切换按钮，并且与“不优化原始新方案折线”的状态形成反向联动。
-2. 当“启用次卡优化”时，方案一/方案二的折线替换为“按月内最优次卡策略计算后的总消费额”；同时关闭原始未优化的方案一/方案二折线。
-3. 当“关闭次卡优化”时，方案一/方案二恢复为原始单程票累计支出折线；同时关闭优化后的新折线。
-4. 原方案“现行方案”始终不参与次卡优化，保持原有折线逻辑。
+1. 为图表增加一个“是否使用次卡省钱”的切换按钮，并且与“不优化原始新方案折线”的状态形成反向联动。
+2. 当“启用次卡省钱”时，方案一/方案二的折线替换为“按月内最优次卡策略计算后的总消费额”；同时关闭原始未优化的方案一/方案二折线。
+3. 当“关闭次卡省钱”时，方案一/方案二恢复为原始单程票累计支出折线；同时关闭优化后的新折线。
+4. 原方案“现行方案”始终不参与次卡省钱，保持原有折线逻辑。
 5. 文档重点放在“在一个自然月里，如何选择次卡组合，才能让总开支最低”，而不是泛泛地讨论是否适合买卡。
 
 ## 设计原则
 
 ### 1. 只优化新方案
 
-只有以下两条新方案允许结合次卡优化：
+只有以下两条新方案允许结合次卡省钱：
 
 - 方案一
 - 方案二
@@ -33,7 +33,7 @@
 
 UI 中提供一个单一切换按钮，如：
 
-- “启用次卡优化” / “关闭次卡优化”
+- “启用次卡省钱” / “关闭次卡省钱”
 
 其含义为：
 
@@ -103,7 +103,7 @@ monthly_optimal_cost(S, N) = min(
 
 - 仅用于方案一和方案二参与比较；
 - 不与现行方案共存；
-- 只在“启用次卡优化”状态下生效；
+- 只在“启用次卡省钱”状态下生效；
 - 仅考虑 0 / 45 / 60 / 90 次卡的四种状态，不考虑超过 90 次的月内候选覆盖范围。
 
 更进一步地说：
@@ -135,7 +135,7 @@ monthly_optimal_cost(S, N) = min(
 
 - `rawTotal`：未优化的累计单程票支出
 - `optimizedTotal`：启用次卡后，月内最优总消费
-- `usePass`：是否启用次卡优化
+- `usePass`：是否启用次卡省钱
 - `selectedPasses`：本月实际采用的次卡组合
 - `strategyLabel`：用户界面显示的推荐说明
 
@@ -209,7 +209,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
   const shouldOptimizePass = key !== "current" && passOptimizationEnabled;
   return {
     key,
-    name: shouldOptimizePass ? `${scheme.name}（次卡优化）` : scheme.name,
+    name: shouldOptimizePass ? `${scheme.name}（次卡省钱）` : scheme.name,
     color: ...,
     data: rideCounts.map((rides) => ({
       rides,
@@ -234,7 +234,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 建议放在图表头部附近，位于 `h2` 后方或图表上方：
 
 - 标题：自然月单程票累计支出
-- 按钮：启用次卡优化
+- 按钮：启用次卡省钱
 
 示例：
 
@@ -243,7 +243,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
   <div class="chart-toolbar">
     <h2>自然月累计支出</h2>
     <button id="passOptimizationToggle" type="button" aria-pressed="false">
-      关闭次卡优化
+      关闭次卡省钱
     </button>
   </div>
   <svg id="fareChart" ...></svg>
@@ -255,7 +255,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 按下按钮后：
 
 - 切换为 `aria-pressed="true"`
-- 显示文本更新为 `已启用次卡优化`
+- 显示文本更新为 `已启用次卡省钱`
 - 方案一/方案二的原始折线被隐藏
 - 方案一/方案二的优化版折线被显示
 - 迷你说明文本可显示：
@@ -269,7 +269,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 
 ### 用户看到的效果
 
-在开启状态下，图中只显示“方案一（次卡优化）”和“方案二（次卡优化）”，而不再显示原始方案一/方案二的单程票折线。
+在开启状态下，图中只显示“方案一（次卡省钱）”和“方案二（次卡省钱）”，而不再显示原始方案一/方案二的单程票折线。
 
 这有两个好处：
 
@@ -284,9 +284,9 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 
 - 现行方案
 - 方案一（原始）
-- 方案一（次卡优化）
+- 方案一（次卡省钱）
 - 方案二（原始）
-- 方案二（次卡优化）
+- 方案二（次卡省钱）
 
 如果 UI 开关关闭，则只显示原始版本；如果开启，则只显示优化版本。
 
@@ -304,7 +304,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 示例：
 
 ```
-方案一（次卡优化）
+方案一（次卡省钱）
 次数：68
 累计支出：¥563.20
 最优策略：买 60 次卡 + 余票按单程票
@@ -318,11 +318,11 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 
 这是最关键的要求，也是当前设计的底线。
 
-- 现行方案：不支持次卡优化
+- 现行方案：不支持次卡省钱
 - 方案一：启用时优化
 - 方案二：启用时优化
 
-这样可以保持“政策对比”逻辑清晰，并且避免“误把次卡优化当作原方案的一部分”。
+这样可以保持“政策对比”逻辑清晰，并且避免“误把次卡省钱当作原方案的一部分”。
 
 ### 决策二：折线的替换语义
 
@@ -341,7 +341,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 
 ## 可接受性标准
 
-1. 用户可以切换“次卡优化”开关。
+1. 用户可以切换“次卡省钱”开关。
 2. 开关打开时，方案一和方案二的原始折线被隐藏，优化版折线被显示。
 3. 开关关闭时，方案一和方案二恢复为原始单程票累计支出折线，优化版折线被隐藏。
 4. 现行方案仍然使用原始累计单程票折线。
@@ -357,7 +357,7 @@ const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => {
 2. 抽离一个 `getOptimizedMonthlyTotal(distanceKm, schemeKey, rides)` 函数。
 3. 让方案一/方案二在开关开启时走优化逻辑。
 4. 让现行方案永远走原始逻辑。
-5. 更新 tooltip/图例文案，突出“次卡优化”的语义。
+5. 更新 tooltip/图例文案，突出“次卡省钱”的语义。
 
 这样可以把改动集中在图表计算层，不影响路径查询、地铁网络绘制与票价展示。
 
