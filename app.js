@@ -2,6 +2,7 @@ import { createMetroNetwork, shortestPath } from "./metro-pathfinding.js";
 import {
   calculateFare,
   calculateFareWithMonthlyDiscount,
+  commuterPasses,
   fareSchemes,
   getUniquePassRecommendation,
 } from "./fare-policy.js";
@@ -166,6 +167,38 @@ function renderFareChart(distanceKm) {
     .attr("y2", (d) => y(d))
     .attr("stroke", "#d8dee4")
     .attr("stroke-width", 1);
+
+  const passReferenceLines = commuterPasses.map((pass) => ({
+    rides: pass.rides,
+    price: pass.price,
+    label: `${pass.rides}次卡：¥${pass.price}`,
+  }));
+
+  chartSvg
+    .append("g")
+    .selectAll("line")
+    .data(passReferenceLines)
+    .join("line")
+    .attr("x1", margin.left)
+    .attr("x2", width - margin.right)
+    .attr("y1", (d) => y(d.price))
+    .attr("y2", (d) => y(d.price))
+    .attr("stroke", "#6e7781")
+    .attr("stroke-width", 1.2)
+    .attr("stroke-dasharray", "6 5")
+    .attr("opacity", 0.9);
+
+  chartSvg
+    .append("g")
+    .selectAll("text")
+    .data(passReferenceLines)
+    .join("text")
+    .attr("x", width - margin.right - 6)
+    .attr("y", (d) => y(d.price) - 6)
+    .attr("text-anchor", "end")
+    .attr("fill", "#57606a")
+    .attr("font-size", 11)
+    .text((d) => d.label);
 
   chartSvg
     .append("g")
