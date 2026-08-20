@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>上海地铁最短路径查询</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>上海地铁最短路径查询</h1>
+      <p class="hint">
+        依据维基百科线路站点顺序计算最短路径（按估算里程），并按上海地铁里程票价规则估算票价。
+      </p>
+
+      <section class="controls">
+        <label>
+          起点
+          <input id="startInput" list="stationList" placeholder="输入或选择站名（英文）" />
+        </label>
+        <label>
+          终点
+          <input id="endInput" list="stationList" placeholder="输入或选择站名（英文）" />
+        </label>
+        <button id="searchBtn" type="button">查询最短路径</button>
+      </section>
+
+      <datalist id="stationList"></datalist>
+
+      <section id="result" class="result">正在加载数据…</section>
+
+      <section class="map-panel">
+        <svg id="mapSvg" width="1200" height="800" aria-label="上海地铁网络图"></svg>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="./app.js" type="module"></script>
+  </body>
+  </html>
