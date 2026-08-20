@@ -1,4 +1,10 @@
 import { createMetroNetwork, shortestPath } from "./metro-pathfinding.js";
+import {
+  calculateFare,
+  calculateFareWithMonthlyDiscount,
+  fareSchemes,
+  getUniquePassRecommendation,
+} from "./fare-policy.js";
 
 const dataResponse = await fetch("./data/shanghai-metro.json");
 if (!dataResponse.ok) {
@@ -11,6 +17,8 @@ const endInput = document.getElementById("endInput");
 const searchBtn = document.getElementById("searchBtn");
 const result = document.getElementById("result");
 const stationList = document.getElementById("stationList");
+const chartPanel = document.getElementById("chartPanel");
+const chartSvg = d3.select("#fareChart");
 const svg = d3.select("#mapSvg");
 
 for (const station of metroData.stations) {
@@ -31,12 +39,18 @@ searchBtn.addEventListener("click", () => {
 
   if (!metroData.stations.includes(from) || !metroData.stations.includes(to)) {
     result.textContent = "请输入有效的站名（从下拉建议中选择）。";
+    chartPanel.classList.remove("active");
+    chartSvg.selectAll("*").remove();
     graph.highlight([], []);
     return;
   }
 
+  chartPanel.classList.add("active");
+
   if (from === to) {
-    result.textContent = `起终点相同：${from}，票价为 ¥3。`;
+    const fareSummary = buildFareSummary(0);
+    result.innerHTML = `<strong>起终点相同：</strong>${from}，${fareSummary}`;
+    renderFareChart(0);
     graph.highlight([from], []);
     return;
   }
@@ -44,12 +58,13 @@ searchBtn.addEventListener("click", () => {
   const pathResult = shortestPath(metroNetwork, from, to);
   if (!pathResult) {
     result.textContent = "未找到可达路径。";
+    chartPanel.classList.remove("active");
+    chartSvg.selectAll("*").remove();
     graph.highlight([], []);
     return;
   }
 
-  const fare = calculateFare(pathResult.distanceKm);
-  const routeText = pathResult.stations.join(" → ");
+  const fareSummary = buildFareSummary(pathResult.distanceKm);
   const lineInfo = summarizeLines(pathResult.segments);
   const missingDistanceSegments = pathResult.segments.filter(
     (segment) => segment.distanceMarker === missingDistanceMarker,
@@ -62,18 +77,202 @@ searchBtn.addEventListener("click", () => {
           .join("；")} 已按线路数据估算）`;
 
   result.innerHTML = [
-    `<strong>最短路径：</strong>${routeText}`,
-    `<br><strong>站数：</strong>${pathResult.stations.length} 站（含起终点）`,
+    `<strong>经过线路：</strong>${lineInfo}`,
     `<br><strong>估算里程：</strong>${pathResult.distanceKm.toFixed(2)} km`,
-    `<br><strong>估算票价：</strong>¥${fare}`,
-    `<br><strong>经过线路：</strong>${lineInfo}`,
+    `<br><strong>票价对比：</strong>${fareSummary}`,
     missingDistanceText,
   ].join("");
 
+  renderFareChart(pathResult.distanceKm);
   graph.highlight(pathResult.stations, pathResult.segments);
 });
 
-result.innerHTML = `已加载 ${metroData.stations.length} 个站点，选择起终点后点击“查询最短路径”。`;
+result.innerHTML = `已加载 ${metroData.stations.length} 个站点，选择起终点后点击“查询票价及路径”。`;
+chartPanel.classList.remove("active");
+chartSvg.selectAll("*").remove();
+
+function buildFareSummary(distanceKm) {
+  return Object.entries(fareSchemes)
+    .map(([key, scheme]) => `${scheme.name}：¥${calculateFare(distanceKm, key)}`)
+    .join("；");
+}
+
+function renderFareChart(distanceKm) {
+  chartSvg.selectAll("*").remove();
+
+  if (distanceKm === null || Number.isNaN(Number(distanceKm)) || Number(distanceKm) < 0) {
+    chartPanel.classList.remove("active");
+    return;
+  }
+
+  const width = 720;
+  const height = 960;
+  const margin = { top: 40, right: 30, bottom: 80, left: 90 };
+  const rideCounts = d3.range(1, 91);
+  const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => ({
+    key,
+    name: scheme.name,
+    color: {
+      current: "#0969da",
+      scheme1: "#cf222e",
+      scheme2: "#2da44e",
+    }[key] ?? "#57606a",
+    data: rideCounts.map((rides) => ({
+      rides,
+      total: getCumulativeSingleTicketSpend(Number(distanceKm), key, rides),
+    })),
+  }));
+
+  const mergedEntries = new Map();
+  for (const entry of schemeEntries) {
+    const signature = entry.data.map((point) => point.total.toFixed(2)).join("|");
+    const existing = mergedEntries.get(signature);
+
+    if (existing) {
+      existing.names.push(entry.name);
+    } else {
+      mergedEntries.set(signature, {
+        names: [entry.name],
+        color: entry.color,
+        data: entry.data,
+      });
+    }
+  }
+
+  const visibleEntries = Array.from(mergedEntries.values()).map((entry) => ({
+    name: entry.names.length > 1 ? entry.names.join(" + ") : entry.names[0],
+    color: entry.color,
+    data: entry.data,
+  }));
+
+  const maxTotal = d3.max(visibleEntries.flatMap((entry) => entry.data.map((d) => d.total))) ?? 0;
+
+  const x = d3.scaleLinear().domain([1, 90]).range([margin.left, width - margin.right]);
+  const y = d3
+    .scaleLinear()
+    .domain([0, maxTotal > 0 ? maxTotal * 1.08 : 1])
+    .nice()
+    .range([height - margin.bottom, margin.top]);
+
+  const gridLines = y.ticks(5);
+  chartSvg
+    .append("g")
+    .selectAll("line")
+    .data(gridLines)
+    .join("line")
+    .attr("x1", margin.left)
+    .attr("x2", width - margin.right)
+    .attr("y1", (d) => y(d))
+    .attr("y2", (d) => y(d))
+    .attr("stroke", "#d8dee4")
+    .attr("stroke-width", 1);
+
+  chartSvg
+    .append("g")
+    .attr("transform", `translate(0,${height - margin.bottom})`)
+    .call(d3.axisBottom(x).ticks(9).tickFormat((d) => `${d}`));
+
+  chartSvg
+    .append("g")
+    .attr("transform", `translate(${margin.left},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickFormat((d) => `¥${d}`));
+
+  chartSvg
+    .append("g")
+    .selectAll("text")
+    .data(["坐车次数", "累计支出"])
+    .join("text")
+    .attr("x", (d, i) => (i === 0 ? width / 2 : margin.left - 12))
+    .attr("y", (d, i) => (i === 0 ? height - 6 : margin.top + 18))
+    .attr("text-anchor", (d, i) => (i === 0 ? "middle" : "end"))
+    .attr("fill", "#57606a")
+    .attr("font-size", 12)
+    .text((d) => d);
+
+  const lineGroup = chartSvg.append("g");
+  lineGroup
+    .selectAll("path")
+    .data(visibleEntries)
+    .join("path")
+    .attr("fill", "none")
+    .attr("stroke", (d) => d.color)
+    .attr("stroke-width", 2)
+    .attr("d", (d) => d3.line().x((point) => x(point.rides)).y((point) => y(point.total))(d.data));
+
+  const tooltip = d3
+    .select("body")
+    .append("div")
+    .style("position", "fixed")
+    .style("pointer-events", "none")
+    .style("padding", "6px 8px")
+    .style("border-radius", "6px")
+    .style("background", "rgba(31, 35, 40, 0.9)")
+    .style("color", "#fff")
+    .style("font-size", "12px")
+    .style("line-height", "1.4")
+    .style("opacity", 0)
+    .style("z-index", 1000);
+
+  const points = lineGroup
+    .selectAll("circle")
+    .data(
+      visibleEntries.flatMap((entry) =>
+        entry.data.map((point) => ({ ...point, schemeName: entry.name, color: entry.color })),
+      ),
+    )
+    .join("circle")
+    .attr("cx", (d) => x(d.rides))
+    .attr("cy", (d) => y(d.total))
+    .attr("r", 3.5)
+    .attr("fill", (d) => d.color)
+    .attr("stroke", "#ffffff")
+    .attr("stroke-width", 1.2)
+    .attr("opacity", 0.95)
+    .on("pointermove", (event, d) => {
+      tooltip
+        .style("opacity", 1)
+        .style("left", `${event.clientX + 12}px`)
+        .style("top", `${event.clientY + 12}px`)
+        .html(`${d.schemeName}<br>次数：${d.rides}<br>累计支出：¥${d.total.toFixed(2)}`);
+    })
+    .on("pointerleave", () => {
+      tooltip.style("opacity", 0);
+    });
+
+  const legend = chartSvg.append("g").attr("transform", `translate(${margin.left}, 12)`);
+  visibleEntries.forEach((entry, index) => {
+    const xPos = index * 140;
+    legend
+      .append("line")
+      .attr("x1", xPos)
+      .attr("x2", xPos + 18)
+      .attr("y1", 0)
+      .attr("y2", 0)
+      .attr("stroke", entry.color)
+      .attr("stroke-width", 2);
+
+    legend
+      .append("text")
+      .attr("x", xPos + 24)
+      .attr("y", 4)
+      .attr("fill", "#24292f")
+      .attr("font-size", 12)
+      .text(entry.name);
+  });
+}
+
+function getCumulativeSingleTicketSpend(distanceKm, schemeKey, rideCount) {
+  const oneWayFare = calculateFare(distanceKm, schemeKey);
+  const discountThreshold = schemeKey === "current" ? 70 : 100;
+  let total = 0;
+
+  for (let i = 0; i < rideCount; i += 1) {
+    const fare = total >= discountThreshold ? Number((oneWayFare * 0.9).toFixed(2)) : oneWayFare;
+    total += fare;
+  }
+
+  return Number(total.toFixed(2));
+}
 
 function summarizeLines(segments) {
   if (segments.length === 0) {
@@ -100,16 +299,6 @@ function summarizeLines(segments) {
       return `<span style="color:${color}">${lineName}: ${group.from} → ${group.to}</span>`;
     })
     .join("；");
-}
-
-function calculateFare(distanceKm) {
-  if (distanceKm <= 6) return 3;
-  if (distanceKm <= 16) return 4;
-  if (distanceKm <= 26) return 5;
-  if (distanceKm <= 36) return 6;
-  if (distanceKm <= 46) return 7;
-  if (distanceKm <= 56) return 8;
-  return 8 + Math.ceil((distanceKm - 56) / 20);
 }
 
 function buildGraph(svgRoot, metro) {

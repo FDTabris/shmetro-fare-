@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 import { createMetroNetwork, shortestPath } from "./metro-pathfinding.js";
+import { calculateFare, getPassBreakEvenTrips, getUniquePassRecommendation } from "./fare-policy.js";
 import { extractStationName, getChineseLineName } from "./scripts/build-data.mjs";
 
 const metroData = JSON.parse(
@@ -54,6 +55,49 @@ function createSeededPicker(seed) {
     return current % max;
   };
 }
+
+test("fare policy calculations follow the announced pricing schemes", () => {
+  assert.equal(calculateFare(3, "current"), 3);
+  assert.equal(calculateFare(10, "current"), 4);
+  assert.equal(calculateFare(3, "scheme1"), 3);
+  assert.equal(calculateFare(12, "scheme1"), 5);
+  assert.equal(calculateFare(20, "scheme1"), 7);
+  assert.equal(calculateFare(3, "scheme2"), 4);
+  assert.equal(calculateFare(10, "scheme2"), 5);
+  assert.equal(calculateFare(20, "scheme2"), 6);
+  assert.equal(calculateFare(70, "scheme2"), 11);
+
+  const passThresholds = getPassBreakEvenTrips(10, "scheme2");
+  assert.deepEqual(
+    passThresholds.map((pass) => ({ rides: pass.rides, threshold: pass.threshold })),
+    [
+      { rides: 45, threshold: 24 },
+      { rides: 60, threshold: 30 },
+      { rides: 90, threshold: 44 },
+    ],
+  );
+
+  const dedupedRecommendation = getUniquePassRecommendation(12);
+  assert.equal(dedupedRecommendation.same, true);
+  assert.deepEqual(
+    dedupedRecommendation.passes.map((pass) => ({ rides: pass.rides, threshold: pass.threshold })),
+    [
+      { rides: 45, threshold: 19 },
+      { rides: 60, threshold: 25 },
+      { rides: 90, threshold: 38 },
+    ],
+  );
+
+  const tenYuanThresholds = getPassBreakEvenTrips(10, "scheme1");
+  assert.deepEqual(
+    tenYuanThresholds.map((pass) => ({ rides: pass.rides, threshold: pass.threshold })),
+    [
+      { rides: 45, threshold: 22 },
+      { rides: 60, threshold: 28 },
+      { rides: 90, threshold: 42 },
+    ],
+  );
+});
 
 test("Chinese Wikipedia extraction returns Chinese line and station labels", () => {
   assert.equal(getChineseLineName({ id: "1" }), "上海轨道交通1号线");

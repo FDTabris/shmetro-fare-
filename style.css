@@ -72,6 +72,33 @@ button:hover {
   line-height: 1.6;
 }
 
+.chart-panel {
+  display: none;
+  margin-bottom: 12px;
+  padding: 12px 12px 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.chart-panel.active {
+  display: block;
+}
+
+.chart-panel h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+#fareChart {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  background: #fff;
+}
+
 .map-panel {
   border: 1px solid #d0d7de;
   border-radius: 8px;

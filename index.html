@@ -3,31 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>上海地铁最短路径查询</title>
+    <title>上海地铁调价方案对比</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <main class="container">
-      <h1>上海地铁最短路径查询</h1>
-      <p class="hint">
-        依据维基百科线路站点顺序计算最短路径（按估算里程），并按上海地铁里程票价规则估算票价。
-      </p>
+      <h1>上海地铁调价方案对比</h1>
 
       <section class="controls">
         <label>
           起点
-          <input id="startInput" list="stationList" placeholder="输入或选择站名（英文）" />
+          <input id="startInput" list="stationList" placeholder="输入或选择站名" />
         </label>
         <label>
           终点
-          <input id="endInput" list="stationList" placeholder="输入或选择站名（英文）" />
+          <input id="endInput" list="stationList" placeholder="输入或选择站名" />
         </label>
-        <button id="searchBtn" type="button">查询最短路径</button>
+        <button id="searchBtn" type="button">查询票价及路径</button>
       </section>
 
       <datalist id="stationList"></datalist>
 
       <section id="result" class="result">正在加载数据…</section>
+
+      <section id="chartPanel" class="chart-panel hidden">
+        <h2>单程票累计支出（1-90次）</h2>
+        <svg id="fareChart" width="720" height="960" aria-label="单程票累计支出折线图"></svg>
+      </section>
 
       <section class="map-panel">
         <svg id="mapSvg" width="1200" height="800" aria-label="上海地铁网络图"></svg>
