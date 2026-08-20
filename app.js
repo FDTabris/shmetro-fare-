@@ -240,6 +240,8 @@ function renderFareChart(distanceKm) {
     bottom: 80,
     left: Math.max(70, width * 0.12),
   };
+  const averageMonthlyWorkdays = (365 - 52 * 2 - 11) / 12;
+  const averageMonthlyCommuteTrips = averageMonthlyWorkdays * 2;
   const rideCounts = d3.range(1, 91);
 
   chartSvg.attr("viewBox", `0 0 ${width} ${height}`);
@@ -336,6 +338,27 @@ function renderFareChart(distanceKm) {
     .attr("fill", "#57606a")
     .attr("font-size", Math.max(9, 11 * (width / 720)))
     .text((d) => d.label);
+
+  const commuteReference = chartSvg.append("g");
+  commuteReference
+    .append("line")
+    .attr("x1", x(averageMonthlyCommuteTrips))
+    .attr("x2", x(averageMonthlyCommuteTrips))
+    .attr("y1", margin.top)
+    .attr("y2", height - margin.bottom)
+    .attr("stroke", "#6e7781")
+    .attr("stroke-width", 1.2)
+    .attr("stroke-dasharray", "6 5")
+    .attr("opacity", 0.9);
+
+  commuteReference
+    .append("text")
+    .attr("x", x(averageMonthlyCommuteTrips))
+    .attr("y", margin.top + 10)
+    .attr("text-anchor", "middle")
+    .attr("fill", "#57606a")
+    .attr("font-size", Math.max(9, 11 * (width / 720)))
+    .text(`月均通勤≈${averageMonthlyCommuteTrips.toFixed(0)}次`);
 
   chartSvg
     .append("g")
