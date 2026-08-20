@@ -5,6 +5,7 @@ import {
   commuterPasses,
   fareSchemes,
   getOptimalMonthlyPassCost,
+  getRideCountComparison,
   getUniquePassRecommendation,
 } from "./fare-policy.js";
 import { filterStationSuggestions } from "./station-suggestions.js";
@@ -190,7 +191,7 @@ searchBtn.addEventListener("click", () => {
           .join("；")} 已按线路数据估算）`;
 
   result.innerHTML = [
-    `<strong>经过线路：</strong>${lineInfo}`,
+    `<strong>计价最短路径：</strong>${lineInfo}`,
     `<br><strong>估算里程：</strong>${pathResult.distanceKm.toFixed(2)} km`,
     `<br><strong>票价对比：</strong>${fareSummary}`,
     missingDistanceText,
@@ -212,7 +213,7 @@ function buildFareSummary(distanceKm) {
 
 function refreshPassToggleButton() {
   passOptimizationToggle.setAttribute("aria-pressed", String(passOptimizationEnabled));
-  passOptimizationToggle.textContent = passOptimizationEnabled ? "关闭次卡省钱" : "使用次卡省钱";
+  passOptimizationToggle.textContent = passOptimizationEnabled ? "不使用次卡" : "使用次卡";
 }
 
 function getDisplaySchemeName(schemeKey, schemeName) {
@@ -220,7 +221,7 @@ function getDisplaySchemeName(schemeKey, schemeName) {
     return schemeName;
   }
 
-  return `${schemeName}（次卡省钱）`;
+  return `${schemeName}（次卡）`;
 }
 
 function renderFareChart(distanceKm) {
@@ -391,6 +392,54 @@ function renderFareChart(distanceKm) {
     .attr("stroke", (d) => d.color)
     .attr("stroke-width", 2)
     .attr("d", (d) => d3.line().x((point) => x(point.rides)).y((point) => y(point.total))(d.data));
+
+  const hoverReference = chartSvg.append("g");
+  const hoverLine = hoverReference
+    .append("line")
+    .attr("x1", margin.left)
+    .attr("x2", margin.left)
+    .attr("y1", margin.top)
+    .attr("y2", height - margin.bottom)
+    .attr("stroke", "#24292f")
+    .attr("stroke-width", 1.2)
+    .attr("stroke-dasharray", "4 4")
+    .attr("opacity", 0);
+
+  const hoverTarget = chartSvg.append("rect")
+    .attr("x", margin.left)
+    .attr("y", margin.top)
+    .attr("width", width - margin.left - margin.right)
+    .attr("height", height - margin.top - margin.bottom)
+    .attr("fill", "transparent")
+    .style("cursor", "crosshair")
+    .on("pointermove", (event) => {
+      const [mouseX] = d3.pointer(event, chartSvg.node());
+      const rideCount = Math.min(90, Math.max(1, Math.round(x.invert(mouseX))));
+      const comparison = getRideCountComparison(Number(distanceKm), rideCount, {
+        withPassOptimization: passOptimizationEnabled,
+      });
+
+      hoverLine
+        .attr("x1", x(rideCount))
+        .attr("x2", x(rideCount))
+        .attr("opacity", 1);
+
+      tooltip
+        .style("opacity", 1)
+        .style("left", `${event.clientX + 12}px`)
+        .style("top", `${event.clientY + 12}px`)
+        .html(
+          `乘车次数：${rideCount}<br>${comparison
+            .map(
+              ({ name, total, key }) => `${getDisplaySchemeName(key, name)}：¥${total.toFixed(2)}`,
+            )
+            .join("<br>")}`,
+        );
+    })
+    .on("pointerleave", () => {
+      hoverLine.attr("opacity", 0);
+      tooltip.style("opacity", 0);
+    });
 
   const tooltip = d3
     .select("body")

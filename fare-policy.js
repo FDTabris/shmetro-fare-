@@ -182,6 +182,24 @@ export function getOptimalMonthlyPassCost(distanceKm, schemeKey = "scheme1", rid
   return Number(Math.min(noPassCost, bestPassCost).toFixed(2));
 }
 
+export function getRideCountComparison(distanceKm, rideCount, { withPassOptimization = false } = {}) {
+  const normalizedRideCount = Math.min(90, Math.max(1, Math.round(rideCount)));
+
+  return Object.entries(fareSchemes).map(([key, scheme]) => {
+    const total =
+      withPassOptimization && key !== "current"
+        ? getOptimalMonthlyPassCost(Number(distanceKm), key, normalizedRideCount)
+        : getCumulativeSingleTicketSpend(Number(distanceKm), key, normalizedRideCount);
+
+    return {
+      key,
+      name: scheme.name,
+      rides: normalizedRideCount,
+      total: Number(total.toFixed(2)),
+    };
+  });
+}
+
 function getCumulativeSingleTicketSpend(distanceKm, schemeKey, rideCount) {
   const oneWayFare = calculateFare(distanceKm, schemeKey);
   const discountThreshold = schemeKey === "current" ? 70 : 100;

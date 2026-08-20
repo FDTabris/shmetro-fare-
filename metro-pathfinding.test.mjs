@@ -8,6 +8,7 @@ import {
   getPassBreakEvenTrips,
   getUniquePassRecommendation,
   getOptimalMonthlyPassCost,
+  getRideCountComparison,
 } from "./fare-policy.js";
 import { filterStationSuggestions } from "./station-suggestions.js";
 import { extractStationName, getChineseLineName } from "./scripts/build-data.mjs";
@@ -110,6 +111,29 @@ test("monthly pass optimization prefers the cheapest pass state without exceedin
   assert.equal(getOptimalMonthlyPassCost(10, "scheme1", 60), 270);
   assert.equal(getOptimalMonthlyPassCost(10, "scheme2", 90), 390);
   assert.ok(getOptimalMonthlyPassCost(10, "scheme1", 45) < 225);
+});
+
+test("ride-count comparison returns the scheme totals for the same X-axis value", () => {
+  const comparison = getRideCountComparison(10, 45, { withPassOptimization: false });
+
+  assert.deepEqual(
+    comparison.map(({ key, rides, total }) => ({ key, rides, total })),
+    [
+      { key: "current", rides: 45, total: 169.2 },
+      { key: "scheme1", rides: 45, total: 212.5 },
+      { key: "scheme2", rides: 45, total: 212.5 },
+    ],
+  );
+
+  const optimized = getRideCountComparison(10, 45, { withPassOptimization: true });
+  assert.deepEqual(
+    optimized.map(({ key, total }) => ({ key, total })),
+    [
+      { key: "current", total: 169.2 },
+      { key: "scheme1", total: 210 },
+      { key: "scheme2", total: 210 },
+    ],
+  );
 });
 
 test("Chinese Wikipedia extraction returns Chinese line and station labels", () => {
