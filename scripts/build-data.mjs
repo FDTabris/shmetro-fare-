@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 
 const EN_RAW_BASE = "https://en.wikipedia.org/w/index.php";
 const ZH_RAW_BASE = "https://zh.wikipedia.org/w/index.php";
@@ -53,6 +54,12 @@ const REVERSED_CHINESE_ROUTE_LINES = new Set(["3"]);
 function getChineseLineTitle(line) {
   return line.id === "Pujiang" ? "上海轨道交通浦江线" : `上海轨道交通${line.id}号线`;
 }
+
+function getChineseLineName(line) {
+  return line.id === "Pujiang" ? "上海轨道交通浦江线" : `上海轨道交通${line.id}号线`;
+}
+
+export { getChineseLineName };
 
 const buildRawUrl = (baseUrl, title) =>
   `${baseUrl}?title=${encodeURIComponent(title)}&action=raw`;
@@ -407,7 +414,7 @@ function extractStationName(cell) {
   }
 
   const stationTemplate = cell.match(
-    /\{\{(?:stl|ltl)\|SHM\|([^}|]+)(?:\|[^}]*)?\}\}/i,
+    /\{\{(?:stl|ltl)\|(?:SHM|上海地铁)\|([^}|]+)(?:\|[^}]*)?\}\}/i,
   );
   if (stationTemplate) {
     return normalizeStationName(stationTemplate[1]);
@@ -430,9 +437,11 @@ function extractStationName(cell) {
         "",
       ),
     );
+    const looksLikeStationName =
+      /^[A-Za-z]/.test(candidate) || /[\u4e00-\u9fff]/.test(candidate);
     if (
       candidate &&
-      /^[A-Za-z]/.test(candidate) &&
+      looksLikeStationName &&
       !candidate.endsWith(":") &&
       !/^As of\b/i.test(candidate)
     ) {
@@ -441,21 +450,23 @@ function extractStationName(cell) {
   }
 
   const plain = cleanInlineMarkup(cell.replace(/\{\{[^}]+\}\}/g, " "));
-  if (
+  const looksLikePlainStationName =
     plain &&
-    /^[A-Za-z][A-Za-z0-9' .·&()/:-]+$/.test(plain) &&
+    (/[\u4e00-\u9fff]/.test(plain) || /^[A-Za-z]/.test(plain)) &&
     !/^L\d+\//.test(plain) &&
     !plain.endsWith(":") &&
     !/^As of\b/i.test(plain) &&
     !/^(Routes|M|B|P|C|E|AM|Mainline|Branch|Branchline|Clockwise|Counter-clockwise)$/i.test(
       plain,
-    )
-  ) {
+    );
+  if (looksLikePlainStationName) {
     return normalizeStationName(plain);
   }
 
   return null;
 }
+
+export { extractStationName };
 
 function isStationCode(cell) {
   return (
@@ -606,7 +617,13 @@ function extractChineseStationRows(raw) {
       groups.push(currentGroup);
     }
 
+    const stationName = extractStationName(cells[stationIndex]);
+    if (!stationName) {
+      continue;
+    }
+
     currentGroup.rows.push({
+      station: stationName,
       mileageValues: parseNumericCellValues(cells[stationIndex + 1] ?? ""),
       intervalValues: parseNumericCellValues(cells[stationIndex + 2] ?? ""),
     });
@@ -790,6 +807,59 @@ function parseEdgeDistancesFromChineseLinePage(raw, line, branches) {
   return edgeDistances;
 }
 
+function buildChineseBranchStations(raw, line, fallbackBranches) {
+  const groups = extractChineseStationRows(raw);
+  const { sequences } = buildChineseMileageSequences(line, groups);
+
+  if (sequences.length === 0) {
+    return fallbackBranches;
+  }
+
+  return sequences.map((sequence) =>
+    sequence.map((item) => item.row.station).filter(Boolean),
+  );
+}
+
+function remapEdgeDistancesToChineseNames(line, englishBranches, chineseBranches, edgeDistances) {
+  const remapped = new Map();
+
+  for (let branchIndex = 0; branchIndex < englishBranches.length; branchIndex += 1) {
+    const englishBranch = englishBranches[branchIndex] ?? [];
+    const chineseBranch = chineseBranches[branchIndex] ?? [];
+
+    if (englishBranch.length !== chineseBranch.length) {
+      continue;
+    }
+
+    for (let i = 1; i < englishBranch.length; i += 1) {
+      const distanceKm = edgeDistances.get(
+        [englishBranch[i - 1], englishBranch[i]].sort().join("::"),
+      );
+      if (distanceKm == null) {
+        continue;
+      }
+      remapped.set(
+        [chineseBranch[i - 1], chineseBranch[i]].sort().join("::"),
+        distanceKm,
+      );
+    }
+
+    if (line.circular && englishBranch.length > 1 && chineseBranch.length > 1) {
+      const distanceKm = edgeDistances.get(
+        [englishBranch.at(-1), englishBranch[0]].sort().join("::"),
+      );
+      if (distanceKm != null) {
+        remapped.set(
+          [chineseBranch.at(-1), chineseBranch[0]].sort().join("::"),
+          distanceKm,
+        );
+      }
+    }
+  }
+
+  return remapped;
+}
+
 function buildEdges(linesWithBranches, edgeDistancesByLineId) {
   const edges = [];
   const missingSegments = [];
@@ -886,39 +956,55 @@ function buildEdges(linesWithBranches, edgeDistancesByLineId) {
 }
 
 async function main() {
-  const [templateRaw, moduleRaw, ...linePagesRaw] = await Promise.all([
-    fetchRaw(EN_RAW_BASE, TEMPLATE_TITLE),
-    fetchRaw(EN_RAW_BASE, MODULE_TITLE),
-    ...LINES.map((line) => fetchRaw(ZH_RAW_BASE, getChineseLineTitle(line))),
-  ]);
+  const linePagesRaw = await Promise.all(
+    LINES.map((line) => fetchRaw(ZH_RAW_BASE, getChineseLineTitle(line))),
+  );
 
-  const branchesByLine = parseBranches(templateRaw);
   const linePagesByLineId = new Map(
     LINES.map((line, index) => [line.id, linePagesRaw[index]]),
+  );
+
+  const chineseBranchesByLine = new Map(
+    LINES.map((line) => [
+      line.id,
+      buildChineseBranchStations(
+        linePagesByLineId.get(line.id),
+        line,
+        [],
+      ),
+    ]),
   );
 
   const lengthsByLineId = new Map(
     LINES.map((line) => [line.id, parseLineLengthKm(linePagesByLineId.get(line.id))]),
   );
+
   const edgeDistancesByLineId = new Map(
     LINES.map((line) => [
       line.id,
       parseEdgeDistancesFromChineseLinePage(
         linePagesByLineId.get(line.id),
         line,
-        branchesByLine.get(line.id) ?? [],
+        chineseBranchesByLine.get(line.id) ?? [],
       ),
     ]),
   );
 
+  let moduleRaw = "";
+  try {
+    moduleRaw = await fetchRaw(EN_RAW_BASE, MODULE_TITLE);
+  } catch {
+    moduleRaw = "";
+  }
+
   const lines = LINES.map((line) => ({
     id: line.id,
-    name: line.name,
+    name: getChineseLineName(line),
     page: line.page,
     color: parseColor(moduleRaw, line.id),
     circular: Boolean(line.circular),
     lengthKm: lengthsByLineId.get(line.id),
-    branches: branchesByLine.get(line.id) ?? [],
+    branches: chineseBranchesByLine.get(line.id) ?? [],
   }));
 
   const stations = getAllStations(lines);
@@ -951,7 +1037,10 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

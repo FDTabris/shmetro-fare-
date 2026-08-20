@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 import { createMetroNetwork, shortestPath } from "./metro-pathfinding.js";
+import { extractStationName, getChineseLineName } from "./scripts/build-data.mjs";
 
 const metroData = JSON.parse(
   await readFile(new URL("./data/shanghai-metro.json", import.meta.url), "utf8"),
@@ -53,6 +54,13 @@ function createSeededPicker(seed) {
     return current % max;
   };
 }
+
+test("Chinese Wikipedia extraction returns Chinese line and station labels", () => {
+  assert.equal(getChineseLineName({ id: "1" }), "上海轨道交通1号线");
+  assert.equal(getChineseLineName({ id: "Pujiang" }), "上海轨道交通浦江线");
+  assert.equal(extractStationName("{{stl|上海地铁|莘庄}}"), "莘庄");
+  assert.equal(extractStationName("{{stl|上海地铁|上海南站}}"), "上海南站");
+});
 
 test("single Line 1 data returns the exact single-line route", () => {
   const subset = buildSubset(["1"]);

@@ -34,7 +34,13 @@ node scripts/build-data.mjs
 node --test
 ```
 
-3. 启动静态文件服务器（任选其一）：
+3. 生成中文站名/线路名数据（可选）：
+
+```bash
+node scripts/translate-to-zh.mjs
+```
+
+4. 启动静态文件服务器（任选其一）：
 
 ```bash
 python3 -m http.server 8080
