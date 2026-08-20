@@ -157,3 +157,40 @@ export function getUniquePassRecommendation(distanceKm) {
     scheme2,
   };
 }
+
+export function getOptimalMonthlyPassCost(distanceKm, schemeKey = "scheme1", rideCount = 0) {
+  if (!Number.isFinite(rideCount) || rideCount <= 0) {
+    return 0;
+  }
+
+  const cappedRides = Math.min(90, Math.max(0, Math.round(rideCount)));
+  const noPassCost = getCumulativeSingleTicketSpend(distanceKm, schemeKey, cappedRides);
+  const passOptions = [
+    { rides: 45, price: 210 },
+    { rides: 60, price: 270 },
+    { rides: 90, price: 390 },
+  ];
+
+  const bestPassCost = passOptions.reduce((best, pass) => {
+    const coveredTrips = Math.min(cappedRides, pass.rides);
+    const remainingTrips = cappedRides - coveredTrips;
+    const remainingCost = remainingTrips === 0 ? 0 : getCumulativeSingleTicketSpend(distanceKm, schemeKey, remainingTrips);
+    const total = pass.price + remainingCost;
+    return Math.min(best, total);
+  }, noPassCost);
+
+  return Number(Math.min(noPassCost, bestPassCost).toFixed(2));
+}
+
+function getCumulativeSingleTicketSpend(distanceKm, schemeKey, rideCount) {
+  const oneWayFare = calculateFare(distanceKm, schemeKey);
+  const discountThreshold = schemeKey === "current" ? 70 : 100;
+  let total = 0;
+
+  for (let i = 0; i < rideCount; i += 1) {
+    const fare = total >= discountThreshold ? Number((oneWayFare * 0.9).toFixed(2)) : oneWayFare;
+    total += fare;
+  }
+
+  return Number(total.toFixed(2));
+}

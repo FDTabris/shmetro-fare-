@@ -11,24 +11,33 @@
       <h1>上海地铁调价方案对比</h1>
 
       <section class="controls">
-        <label>
-          起点
-          <input id="startInput" list="stationList" placeholder="输入或选择站名" />
-        </label>
-        <label>
-          终点
-          <input id="endInput" list="stationList" placeholder="输入或选择站名" />
-        </label>
+        <div class="input-group">
+          <label for="startInput">起点</label>
+          <div class="autocomplete-wrap">
+            <input id="startInput" autocomplete="off" placeholder="输入或选择站名" />
+            <ul id="startSuggestions" class="suggestions hidden" role="listbox" aria-label="起点候选站名"></ul>
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="endInput">终点</label>
+          <div class="autocomplete-wrap">
+            <input id="endInput" autocomplete="off" placeholder="输入或选择站名" />
+            <ul id="endSuggestions" class="suggestions hidden" role="listbox" aria-label="终点候选站名"></ul>
+          </div>
+        </div>
         <button id="searchBtn" type="button">查询票价及路径</button>
       </section>
-
-      <datalist id="stationList"></datalist>
 
       <section id="result" class="result">正在加载数据…</section>
 
       <section id="chartPanel" class="chart-panel hidden">
-        <h2>自然月单程票累计支出</h2>
-        <svg id="fareChart" width="720" height="960" aria-label="单程票累计支出折线图"></svg>
+        <div class="chart-toolbar">
+          <h2>自然月累计支出</h2>
+          <button id="passOptimizationToggle" class="secondary" type="button" aria-pressed="false">
+            使用次卡优化
+          </button>
+        </div>
+        <svg id="fareChart" width="720" height="960" aria-label="累计支出折线图"></svg>
       </section>
 
       <section class="map-panel">

@@ -33,19 +33,63 @@ h1 {
   margin-bottom: 12px;
 }
 
-label {
+.input-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 260px;
 }
 
+label {
+  font-weight: 600;
+}
+
+.autocomplete-wrap {
+  position: relative;
+}
+
 input {
+  width: 100%;
   height: 36px;
   border: 1px solid #d0d7de;
   border-radius: 8px;
   padding: 0 10px;
   font-size: 14px;
+}
+
+.suggestions {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px 0;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  list-style: none;
+}
+
+.suggestions.hidden {
+  display: none;
+}
+
+.suggestion-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #1f2328;
+}
+
+.suggestion-item:hover,
+.suggestion-item:focus,
+.suggestion-item.active {
+  background: #f6f8fa;
+  outline: none;
 }
 
 button {
@@ -79,24 +123,67 @@ button:hover {
   border: 1px solid #d0d7de;
   border-radius: 8px;
   background: #fff;
+  overflow-x: auto;
 }
 
 .chart-panel.active {
   display: block;
 }
 
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .chart-panel h2 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 18px;
+}
+
+button.secondary {
+  background: #eaeef2;
+  color: #1f2328;
+}
+
+button.secondary:hover {
+  background: #dfe7ef;
 }
 
 #fareChart {
   display: block;
   width: 100%;
+  min-width: 320px;
   max-width: 720px;
   height: auto;
   aspect-ratio: 3 / 4;
   background: #fff;
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 12px;
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  label {
+    min-width: 0;
+  }
+
+  .chart-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #fareChart {
+    min-width: 280px;
+  }
 }
 
 .map-panel {

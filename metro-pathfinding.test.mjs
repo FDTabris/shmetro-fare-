@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 import { createMetroNetwork, shortestPath } from "./metro-pathfinding.js";
-import { calculateFare, getPassBreakEvenTrips, getUniquePassRecommendation } from "./fare-policy.js";
+import {
+  calculateFare,
+  getPassBreakEvenTrips,
+  getUniquePassRecommendation,
+  getOptimalMonthlyPassCost,
+} from "./fare-policy.js";
+import { filterStationSuggestions } from "./station-suggestions.js";
 import { extractStationName, getChineseLineName } from "./scripts/build-data.mjs";
 
 const metroData = JSON.parse(
@@ -99,11 +105,53 @@ test("fare policy calculations follow the announced pricing schemes", () => {
   );
 });
 
+test("monthly pass optimization prefers the cheapest pass state without exceeding the 90-ride chart range", () => {
+  assert.equal(getOptimalMonthlyPassCost(10, "scheme1", 45), 210);
+  assert.equal(getOptimalMonthlyPassCost(10, "scheme1", 60), 270);
+  assert.equal(getOptimalMonthlyPassCost(10, "scheme2", 90), 390);
+  assert.ok(getOptimalMonthlyPassCost(10, "scheme1", 45) < 225);
+});
+
 test("Chinese Wikipedia extraction returns Chinese line and station labels", () => {
   assert.equal(getChineseLineName({ id: "1" }), "上海轨道交通1号线");
   assert.equal(getChineseLineName({ id: "Pujiang" }), "上海轨道交通浦江线");
   assert.equal(extractStationName("{{stl|上海地铁|莘庄}}"), "莘庄");
   assert.equal(extractStationName("{{stl|上海地铁|上海南站}}"), "上海南站");
+});
+
+test("station suggestion filter matches user prefixes reliably on mobile browsers", () => {
+  const stations = [
+    "人民广场",
+    "上海南站",
+    "上海体育馆",
+    "上海火车站",
+    "上海虹桥站",
+    "虹桥路",
+    "虹桥火车站",
+    "陆家嘴",
+  ];
+
+  assert.deepEqual(filterStationSuggestions(stations, "上海"), [
+    "上海南站",
+    "上海体育馆",
+    "上海火车站",
+    "上海虹桥站",
+  ]);
+  assert.deepEqual(filterStationSuggestions(stations, "虹桥"), [
+    "虹桥路",
+    "虹桥火车站",
+    "上海虹桥站",
+  ]);
+  assert.deepEqual(filterStationSuggestions(stations, ""), [
+    "人民广场",
+    "上海南站",
+    "上海体育馆",
+    "上海火车站",
+    "上海虹桥站",
+    "虹桥路",
+    "虹桥火车站",
+    "陆家嘴",
+  ]);
 });
 
 test("single Line 1 data returns the exact single-line route", () => {

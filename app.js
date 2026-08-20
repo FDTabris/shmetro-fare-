@@ -4,8 +4,10 @@ import {
   calculateFareWithMonthlyDiscount,
   commuterPasses,
   fareSchemes,
+  getOptimalMonthlyPassCost,
   getUniquePassRecommendation,
 } from "./fare-policy.js";
+import { filterStationSuggestions } from "./station-suggestions.js";
 
 const dataResponse = await fetch("./data/shanghai-metro.json");
 if (!dataResponse.ok) {
@@ -17,15 +19,122 @@ const startInput = document.getElementById("startInput");
 const endInput = document.getElementById("endInput");
 const searchBtn = document.getElementById("searchBtn");
 const result = document.getElementById("result");
-const stationList = document.getElementById("stationList");
 const chartPanel = document.getElementById("chartPanel");
+const passOptimizationToggle = document.getElementById("passOptimizationToggle");
 const chartSvg = d3.select("#fareChart");
 const svg = d3.select("#mapSvg");
+const stationSuggestionsByInput = new Map([
+  [startInput, document.getElementById("startSuggestions")],
+  [endInput, document.getElementById("endSuggestions")],
+]);
 
-for (const station of metroData.stations) {
-  const option = document.createElement("option");
-  option.value = station;
-  stationList.appendChild(option);
+let passOptimizationEnabled = false;
+let lastDistanceKm = 0;
+
+function buildSuggestionList(input, listElement, suggestions) {
+  listElement.innerHTML = "";
+
+  if (!suggestions.length) {
+    listElement.classList.add("hidden");
+    return;
+  }
+
+  for (const suggestion of suggestions) {
+    const item = document.createElement("li");
+    item.className = "suggestion-item";
+    item.textContent = suggestion;
+    item.tabIndex = 0;
+    item.setAttribute("role", "option");
+    item.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      input.value = suggestion;
+      hideSuggestions(input);
+    });
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        input.value = suggestion;
+        hideSuggestions(input);
+      }
+    });
+    listElement.appendChild(item);
+  }
+
+  listElement.classList.remove("hidden");
+}
+
+function hideSuggestions(input) {
+  const listElement = stationSuggestionsByInput.get(input);
+  if (!listElement) {
+    return;
+  }
+
+  listElement.classList.add("hidden");
+}
+
+function updateSuggestions(input) {
+  const listElement = stationSuggestionsByInput.get(input);
+  if (!listElement) {
+    return;
+  }
+
+  const query = input.value.trim();
+  const suggestions = filterStationSuggestions(metroData.stations, query);
+  buildSuggestionList(input, listElement, suggestions);
+
+  if (!query) {
+    listElement.classList.add("hidden");
+  }
+}
+
+for (const input of [startInput, endInput]) {
+  input.addEventListener("input", () => {
+    updateSuggestions(input);
+  });
+
+  input.addEventListener("focus", () => {
+    updateSuggestions(input);
+  });
+
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => hideSuggestions(input), 120);
+  });
+
+  input.addEventListener("keydown", (event) => {
+    const listElement = stationSuggestionsByInput.get(input);
+    if (!listElement || listElement.classList.contains("hidden")) {
+      return;
+    }
+
+    const items = [...listElement.querySelectorAll(".suggestion-item")];
+    let activeIndex = items.findIndex((item) => item.classList.contains("active"));
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      activeIndex = activeIndex < items.length - 1 ? activeIndex + 1 : 0;
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      activeIndex = activeIndex > 0 ? activeIndex - 1 : items.length - 1;
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      hideSuggestions(input);
+      return;
+    } else if (event.key === "Enter") {
+      const activeItem = items[activeIndex];
+      if (activeItem) {
+        event.preventDefault();
+        input.value = activeItem.textContent;
+        hideSuggestions(input);
+      }
+      return;
+    } else {
+      return;
+    }
+
+    items.forEach((item, index) => {
+      item.classList.toggle("active", index === activeIndex);
+    });
+  });
 }
 
 const lineColorById = new Map(metroData.lines.map((line) => [line.id, line.color]));
@@ -33,6 +142,12 @@ const lineNameById = new Map(metroData.lines.map((line) => [line.id, line.name])
 const missingDistanceMarker = metroData.distanceMetadata?.missingDistanceMarker;
 const metroNetwork = createMetroNetwork(metroData.stations, metroData.edges);
 const graph = buildGraph(svg, metroData);
+
+passOptimizationToggle.addEventListener("click", () => {
+  passOptimizationEnabled = !passOptimizationEnabled;
+  refreshPassToggleButton();
+  renderFareChart(lastDistanceKm);
+});
 
 searchBtn.addEventListener("click", () => {
   const from = startInput.value.trim();
@@ -47,6 +162,7 @@ searchBtn.addEventListener("click", () => {
   }
 
   chartPanel.classList.add("active");
+  lastDistanceKm = 0;
 
   if (from === to) {
     const fareSummary = buildFareSummary(0);
@@ -65,6 +181,7 @@ searchBtn.addEventListener("click", () => {
     return;
   }
 
+  lastDistanceKm = Number(pathResult.distanceKm);
   const fareSummary = buildFareSummary(pathResult.distanceKm);
   const lineInfo = summarizeLines(pathResult.segments);
   const missingDistanceSegments = pathResult.segments.filter(
@@ -91,11 +208,25 @@ searchBtn.addEventListener("click", () => {
 result.innerHTML = `已加载 ${metroData.stations.length} 个站点，选择起终点后点击“查询票价及路径”。`;
 chartPanel.classList.remove("active");
 chartSvg.selectAll("*").remove();
+refreshPassToggleButton();
 
 function buildFareSummary(distanceKm) {
   return Object.entries(fareSchemes)
     .map(([key, scheme]) => `${scheme.name}：¥${calculateFare(distanceKm, key)}`)
     .join("；");
+}
+
+function refreshPassToggleButton() {
+  passOptimizationToggle.setAttribute("aria-pressed", String(passOptimizationEnabled));
+  passOptimizationToggle.textContent = passOptimizationEnabled ? "关闭次卡优化" : "使用次卡优化";
+}
+
+function getDisplaySchemeName(schemeKey, schemeName) {
+  if (!passOptimizationEnabled || schemeKey === "current") {
+    return schemeName;
+  }
+
+  return `${schemeName}（次卡优化）`;
 }
 
 function renderFareChart(distanceKm) {
@@ -106,13 +237,22 @@ function renderFareChart(distanceKm) {
     return;
   }
 
-  const width = 720;
-  const height = 960;
-  const margin = { top: 40, right: 30, bottom: 80, left: 90 };
+  const containerWidth = Math.max(320, chartSvg.node() ? chartSvg.node().clientWidth || 720 : 720);
+  const width = Math.min(720, containerWidth);
+  const height = Math.max(420, Math.min(960, width * 1.28));
+  const margin = {
+    top: 40,
+    right: 30,
+    bottom: 80,
+    left: Math.max(70, width * 0.12),
+  };
   const rideCounts = d3.range(1, 91);
+
+  chartSvg.attr("viewBox", `0 0 ${width} ${height}`);
+  chartSvg.attr("preserveAspectRatio", "xMidYMid meet");
   const schemeEntries = Object.entries(fareSchemes).map(([key, scheme]) => ({
     key,
-    name: scheme.name,
+    name: getDisplaySchemeName(key, scheme.name),
     color: {
       current: "#0969da",
       scheme1: "#cf222e",
@@ -120,7 +260,10 @@ function renderFareChart(distanceKm) {
     }[key] ?? "#57606a",
     data: rideCounts.map((rides) => ({
       rides,
-      total: getCumulativeSingleTicketSpend(Number(distanceKm), key, rides),
+      total:
+        passOptimizationEnabled && key !== "current"
+          ? getOptimalMonthlyPassCost(Number(distanceKm), key, rides)
+          : getCumulativeSingleTicketSpend(Number(distanceKm), key, rides),
     })),
   }));
 
@@ -197,7 +340,7 @@ function renderFareChart(distanceKm) {
     .attr("y", (d) => y(d.price) - 6)
     .attr("text-anchor", "end")
     .attr("fill", "#57606a")
-    .attr("font-size", 11)
+    .attr("font-size", Math.max(9, 11 * (width / 720)))
     .text((d) => d.label);
 
   chartSvg
@@ -219,7 +362,7 @@ function renderFareChart(distanceKm) {
     .attr("y", (d, i) => (i === 0 ? height - 6 : margin.top + 18))
     .attr("text-anchor", (d, i) => (i === 0 ? "middle" : "end"))
     .attr("fill", "#57606a")
-    .attr("font-size", 12)
+    .attr("font-size", Math.max(10, 12 * (width / 720)))
     .text((d) => d);
 
   const lineGroup = chartSvg.append("g");
@@ -256,10 +399,10 @@ function renderFareChart(distanceKm) {
     .join("circle")
     .attr("cx", (d) => x(d.rides))
     .attr("cy", (d) => y(d.total))
-    .attr("r", 3.5)
+    .attr("r", 2.8)
     .attr("fill", (d) => d.color)
     .attr("stroke", "#ffffff")
-    .attr("stroke-width", 1.2)
+    .attr("stroke-width", 1)
     .attr("opacity", 0.95)
     .on("pointermove", (event, d) => {
       tooltip
@@ -273,8 +416,9 @@ function renderFareChart(distanceKm) {
     });
 
   const legend = chartSvg.append("g").attr("transform", `translate(${margin.left}, 12)`);
+  const legendStep = Math.max(90, 140 * (width / 720));
   visibleEntries.forEach((entry, index) => {
-    const xPos = index * 140;
+    const xPos = index * legendStep;
     legend
       .append("line")
       .attr("x1", xPos)
@@ -289,7 +433,7 @@ function renderFareChart(distanceKm) {
       .attr("x", xPos + 24)
       .attr("y", 4)
       .attr("fill", "#24292f")
-      .attr("font-size", 12)
+      .attr("font-size", Math.max(10, 12 * (width / 720)))
       .text(entry.name);
   });
 }
