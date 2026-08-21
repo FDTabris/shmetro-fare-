@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <div id="welcomeModal" class="welcome-modal hidden" role="dialog" aria-modal="true" aria-labelledby="welcomeModalTitle">
+      <div class="welcome-modal__backdrop" aria-hidden="true"></div>
+      <div class="welcome-modal__panel" tabindex="-1">
+        <h2 id="welcomeModalTitle">说明与提醒</h2>
+        <p>
+          里程数据完全来自维基百科，与官方数据必然存在误差；另外，上海地铁存在一些不按照一般计价规则收费的特殊优惠区间，比如莘庄到人民广场里程超过17公里，但按照16公里以下定价¥4。故本应用数据并不保证完全准确，仅供参考，谢谢理解。
+        </p>
+        <button id="dismissWelcomeBtn" type="button">知道了</button>
+      </div>
+    </div>
+
     <main class="container">
       <h1>上海地铁调价方案对比</h1>
 

@@ -200,6 +200,58 @@ searchBtn.addEventListener("click", () => {
   renderFareChart(pathResult.distanceKm);
 });
 
+const welcomeModal = document.getElementById("welcomeModal");
+const dismissWelcomeBtn = document.getElementById("dismissWelcomeBtn");
+const welcomeDismissKey = "shanghai-metro-route-welcome-dismissed";
+
+function hideWelcomeModal() {
+  if (!welcomeModal) {
+    return;
+  }
+
+  welcomeModal.classList.add("hidden");
+}
+
+function dismissWelcomeNotice() {
+  hideWelcomeModal();
+
+  try {
+    localStorage.setItem(welcomeDismissKey, "true");
+  } catch (error) {
+    // Ignore storage failures in private browsing or restricted environments.
+  }
+}
+
+if (dismissWelcomeBtn) {
+  dismissWelcomeBtn.addEventListener("click", dismissWelcomeNotice);
+}
+
+if (welcomeModal) {
+  let shouldShowWelcome = true;
+
+  try {
+    shouldShowWelcome = localStorage.getItem(welcomeDismissKey) !== "true";
+  } catch (error) {
+    shouldShowWelcome = true;
+  }
+
+  if (!shouldShowWelcome) {
+    hideWelcomeModal();
+  } else {
+    welcomeModal.classList.remove("hidden");
+    const focusTarget = welcomeModal.querySelector("button");
+    if (focusTarget) {
+      focusTarget.focus();
+    }
+  }
+
+  welcomeModal.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      dismissWelcomeNotice();
+    }
+  });
+}
+
 result.innerHTML = `已加载 ${metroData.stations.length} 个站点，选择起终点后点击“查询票价及路径”。`;
 chartPanel.classList.remove("active");
 chartSvg.selectAll("*").remove();
